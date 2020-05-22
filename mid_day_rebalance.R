@@ -12,13 +12,14 @@ library(recipes)
 library(AlpacaforR)
 plan(multiprocess)
 
-use_condaenv('tensorflow2gpu', required = TRUE)
+#use_condaenv('tf2gpu', required = TRUE)
 
 acct <- get_account()
 
-pred_df_filter <- readRDS('pred_df_daily.RDS')
+out_df <- readRDS('pred_df_daily.RDS') %>%
+    filter(! ticker %in% 'TSLF')
 
-quotes <- future_map_dfr(pred_df_filter$ticker, riingo_iex_quote, .progress = TRUE)
+quotes <- future_map_dfr(out_df$ticker, riingo_iex_quote, .progress = TRUE)
 
 quotes <- quotes %>%
     filter(as.Date(quoteTimestamp)==Sys.Date()) %>%
@@ -26,9 +27,9 @@ quotes <- quotes %>%
 
 
 
-intraday <- pred_df_filter %>%
+intraday <- out_df %>%
     inner_join(quotes, by='ticker') %>%
-    mutate(last_prop=last/last_close) 
+    mutate(last_prop=last/close_last) 
 
 
 get_intraday_cdf <- function(value, loc, scale, skewness, tailweight){
@@ -45,7 +46,7 @@ get_intraday_cdf <- function(value, loc, scale, skewness, tailweight){
 
 cdf_inp <- list(value=intraday$last_prop,
                 loc=intraday$loc,
-                scale=intraday$sd,
+                scale=intraday$scale,
                 skewness=intraday$skewness,
                 tailweight=intraday$tailweight)
 
@@ -56,7 +57,7 @@ intraday$intra_cdf <- 1-future_pmap_dbl(.l=cdf_inp, .f=get_intraday_cdf, .progre
 longs <- intraday %>%
     arrange(-intra_cdf) %>%
     slice(1:10) %>%
-    select(ticker, last_close, last_prop, last, bidPrice, askPrice)
+    select(ticker, intra_cdf, close_last, last_prop, last, bidPrice, askPrice)
 
 
 long_intraday_multiple <- function(ticker, last_price, desired_dollar, ...){
@@ -84,7 +85,8 @@ riingo_meta(long_inp$ticker) %>%
 shorts <- intraday %>%
     arrange(intra_cdf) %>%
     slice(1:10) %>%
-    select(ticker, last_close, last_prop, last, bidPrice, askPrice)
+    select(ticker, close_last, last_prop, last, bidPrice, askPrice) %>%
+    filter(!ticker %in% c('DGAZ', 'JDST'))
 
 
 short_intraday_multiple <- function(ticker, last_price, desired_dollar, ...){
@@ -110,4 +112,45 @@ riingo_meta(short_inp$ticker) %>%
 long_intra_orders <- pmap(long_inp, long_intraday_multiple)
 
 short_intra_orders <- pmap(short_inp, short_intraday_multiple)
+
+
+
+##
+a <- get_meta(high_upside$ticker[3], endpoint = 'news')
+
+
+
+get_poly_news <- function(symbol) {
+    get_meta(symbol, endpoint = 'news')
+}
+
+
+get_riingo_news <- function(ticker) {
+    df <- riingo_news(ticker)
+    
+    df$query_ticker=ticker
+    
+    return(df)
+}
+
+
+news_all <- future_map_dfr(high_upside$ticker[15:20], get_riingo_news)
+
+
+
+
+news_all_mod <- news_all %>%
+    mutate(today=as.Date(crawlDate)==Sys.Date(),
+           yesterday=as.Date(crawlDate)==Sys.Date()-1,
+           this_week=as.Date(crawlDate)>=Sys.Date()-7) %>% 
+    #unnest(query_ticker) %>%
+    group_by(query_ticker) %>% 
+    summarize(today=sum(today), yesterday=sum(yesterday), this_week=sum(this_week))
+
+a$endpoints$news
+
+news <- riingo_news(high_upside$ticker[2])
+news
+
+
 
