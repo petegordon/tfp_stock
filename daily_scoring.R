@@ -1,3 +1,5 @@
+#config file with API KEYS
+source("config.R")
 
 library(tidyverse)
 library(rsample)
@@ -14,15 +16,18 @@ library(AlpacaforR)
 
 plan(multiprocess)
 
-use_condaenv('tf2gpu', required = TRUE)
+use_condaenv('r-reticulate', required = TRUE)
 
 py_config()
 
 tf_config()
 
-tf_gpu_configured()
+#tf_gpu_configured()
 
-md <- keras_model_sequential %>% layer_dense(units=2, input_share=5, activation='relu')
+#md <- keras_model_sequential %>% layer_dense(units=2, input_share=5, activation='relu')
+
+
+
 
 ###### Pull Alpaca Stock Info
 acct <- get_account()
@@ -118,7 +123,7 @@ x_supp <- df %>%
 
 
 
-transform_recipe <- readRDS('D:/supp_transform_recipe.RDS')
+transform_recipe <- readRDS('supp_transform_recipe.RDS')
 
 
 x_supp <- bake(transform_recipe, new_data=x_supp, composition = 'matrix')
@@ -214,4 +219,4 @@ out_df <- tibble(
     filter(close_last>5 & volume_last>50000) 
 
 
-saveRDS(out_df, 'pred_df_daily.RDS')
+saveRDS(out_df, '../pred_df_daily.RDS')
