@@ -206,11 +206,16 @@ predict <- function(df, supported_tickers){
 }
 
 
+#get alpaca and tiingo shared tickers so we can make trades on alpaca
 supported_tickers <- alpaca_tiingo_tickers(get_calendar_startdate())
-df <- tiingo_prices(supported_tickers$ticker[1:200], get_calendar_startdate())
-saveRDS(df, paste0("../",get_trading_day(),"_tiingo_daily_prices.RDS"))
+
+#get the historical prices from tiingo
+tiingo_daily_prices<- tiingo_prices(supported_tickers$ticker, get_calendar_startdate())
+saveRDS(tiingo_daily_prices, paste0("../",get_trading_day(),"_tiingo_daily_prices.RDS"))
 #df <- readRDS("../2020-05-24_tiingo_daily_prices.RDS")
-out_df <- predict(df, supported_tickers)
+
+#create probability distributions for tiingo tickers historical prices
+out_df <- predict(tiingo_daily_prices, supported_tickers)
 saveRDS(out_df, paste0("../",get_trading_day(),"_pred_df_daily.RDS"))
   
   
